@@ -1,0 +1,293 @@
+将一下代码copy保存为codecomment.em文件
+macro Comments_orUn_gx()  
+{   //用杠星注释多行,或取消杠星注释 ,不选中多行时,只处理当前行  
+    hwnd = GetCurrentWnd()  
+    hbuf = GetCurrentBuf()  
+    if(hbuf ==0)  
+        stop   
+          
+    // debugBuf只是为了调试  
+    // debugBuf = NewBuf("debugBuf")   
+    // ClearBuf(debugBuf)   
+  
+    lnSelFirst = GetWndSelLnFirst(hwnd)     // 获得选中内容的第一行  
+    lnSelLast = GetWndSelLnLast(hwnd)       // 获得选中内容的最后一行  
+          
+    const_space = " "               // 空格  
+    const_comments_begin = "/*"             // 多行注释符号-开始  
+    const_comments_end = "*/"           // 多行注释符号-结束  
+    isCancelComments = 0   
+      
+    // 跳过开始的空行，否则下面报错  
+    line_index = lnSelFirst   
+    orig_text = GetBufLine(hbuf, line_index)    // 获得第一行的text  
+    while(strlen(orig_text) == 0)  
+    {  
+        line_index = line_index + 1  
+        orig_text = GetBufLine(hbuf, line_index)            // 获得下一行的text  
+    }  
+          
+    // 根据第一行选中文本，确定是“注释”，还是“取消注释”  
+    // 判断是否以“//”开始，如果是则认为是“取消注释”，首先需要去掉空格  
+    subIndex = 0          
+    while(strmid(orig_text, subIndex, subIndex+1) == const_space)   
+            subIndex = subIndex + 1   
+      
+    if (strmid(orig_text, subIndex, subIndex+2) == const_comments_begin)    // 以“/*”开头，取消注释  
+    {  
+        isCancelComments = 1   
+          
+        dest_text = strmid(orig_text, subIndex+2, strlen(orig_text))   
+        if(strlen(dest_text) == 0)  
+        {  
+            DelBufLine(hbuf, line_index)                // 本行只有“/*”时，删除  
+        }  
+        else  
+        {  
+            PutBufLine (hbuf, line_index, dest_text)        // 替换以前的text  
+        }  
+        line_index = line_index + 1  
+    }  
+    else    // 进行注释  
+    {  
+        InsBufLine(hbuf, lnSelFirst, "/*")  
+        InsBufLine(hbuf, lnSelLast+2,  "*/")  
+          
+        stop   
+    }  
+      
+    // 遍历所有选中的行  
+    // line_index = lnSelFirst                      // 前面已经跳过开头的空行  
+    // while(line_index <= lnSelLast)                    // 对选中的内容进行操作  
+    while(line_index < GetBufLineCount(hbuf))                //or 从当前行开始，查找到第一个“*/”为止或到结尾  
+    {  
+        orig_text = GetBufLine(hbuf, line_index)    // 获得以前的text  
+        if (strlen(orig_text) > 1)                   // 如果是空行或只有一个字符，则跳过  
+        {  
+            dest_text = ""   
+            if(isCancelComments == 1)               // 取消注释  
+            {  
+                // 查找注释符“*/”  
+                subIndex = 0          
+                while(subIndex < strlen(orig_text)-2 && strmid(orig_text, subIndex, subIndex+2) != const_comments_end)   
+                        subIndex = subIndex + 1   
+                  
+                if (strmid(orig_text, subIndex, subIndex+2) == const_comments_end)  // 找到“*/”，进行处理  
+                {  
+                    prefixText = strmid(orig_text, 0, subIndex)             // 前面的text  
+                    lastText = strmid(orig_text, subIndex+2, strlen(orig_text))     // 后面的text  
+                    dest_text = cat(prefixText, lastText)   
+  
+                    if(strlen(dest_text) == 0)  
+                    {  
+                        DelBufLine(hbuf, line_index)                // 本行只有“*/”时，删除  
+                    }  
+                    else  
+                    {  
+                        PutBufLine (hbuf, line_index, dest_text)        // 替换以前的text  
+                    }  
+                      
+                      
+                    break                               // 退出  
+                }  
+            }  
+        }  
+          
+        line_index = line_index + 1    
+    }  
+}  
+  
+  
+  
+macro CommentSelecte_inOneLine()  
+{   //注释选中,只在单行中有效,不选中任何字符的话就在光标处插入一对杠星注释符  
+    hbuf = GetCurrentBuf()  
+    ln = GetBufLnCur(hbuf)  
+    str = GetBufSelText(hbuf)  
+    str = cat("/*",str)  
+    str = cat(str,"*/")  
+    SetBufSelText (hbuf, str)  
+}  
+  
+macro _tsGetTabSize()    
+{  //只被Comment_gx() 宏调用  
+    szTabSize = GetReg("TabSize");    
+    
+    if (szTabSize != "")    
+    {    
+        tabSize = AsciiFromChar(szTabSize[0]) - AsciiFromChar("0");    
+    }    
+    else    
+    {    
+        tabSize = 4;    
+    }    
+    
+    return tabSize;    
+}    
+    
+    
+macro Comment_gx()    
+{  //用杠星注释,不换行,至少注释一行,不推荐使用  
+    hbuf = GetCurrentBuf();    
+    hwnd = GetCurrentWnd();    
+    
+    sel = GetWndSel(hwnd);    
+    
+    iLine = sel.lnFirst;    
+        
+    // indicate the comment char according to the file type    
+    // for example, using "#" for perl file(.pl) and "/* */" for C/C++.    
+    filename = tolower(GetBufName(hbuf));    
+    suffix = "";    
+    len = strlen(filename);    
+    i = len - 1;    
+    while (i >= 0)    
+    {    
+        if (filename[i-1] == ".")    
+        {    
+            suffix = strmid(filename, i, len)    
+            break;    
+        }    
+        i = i -1;    
+    }    
+    if  ( suffix == "pl" )    
+    {    
+        filetype = 2; // PERL    
+    }    
+    else    
+    {    
+        filetype = 1; // C    
+    }    
+    
+    szLine = GetBufLine(hbuf, iLine);    
+    if (filetype == 1)  // C    
+    {    
+        szLine = cat("/*", szLine);    
+    }    
+    else                // PERL    
+    {    
+        szLine = cat("# ", szLine);    
+    }    
+    PutBufLine(hbuf, iLine, szLine);    
+    iLine = sel.lnLast;    
+    szLine = GetBufLine(hbuf, iLine);    
+    if (filetype == 1)  // C    
+    {    
+        szLine = cat(szLine, "*/");    
+    }    
+    else                // PERL    
+    {    
+        szLine = cat("# ", szLine);    
+    }    
+    PutBufLine(hbuf, iLine, szLine);    
+    
+    
+    
+    if (sel.lnFirst == sel.lnLast)    
+    {    
+        tabSize = _tsGetTabSize() - 1;    
+        sel.ichFirst = sel.ichFirst + tabSize;    
+        sel.ichLim = sel.ichLim + tabSize;    
+    }    
+    SetWndSel(hwnd, sel);    
+}    
+    
+    
+macro Comment_gg()  
+{   //用杠杠注释,不选中多行的话,注释当前行  
+    hwnd = GetCurrentWnd()  
+    selection = GetWndSel( hwnd )  
+    lnFirst = GetWndSelLnFirst( hwnd )  
+    lnLast = GetWndSelLnLast( hwnd )  
+  
+    hbuf = GetCurrentBuf()  
+  
+    ln = lnFirst  
+    buf = GetBufLine( hbuf, ln )  
+    len = strlen( buf )  
+    firststart = len  
+    while( ln <= lnLast )  
+    {  
+        buf = GetBufLine( hbuf, ln )  
+        len = strlen( buf )  
+        start = 0  
+        while( start < len )  
+        {  
+            if( strmid( buf, start, start + 1 ) == CharFromAscii(32) || strmid( buf, start, start + 1 ) == CharFromAscii(9) )  
+            {  
+                start = start + 1  
+                if( start > len )  
+                    break  
+            }  
+            else  
+                break  
+        }  
+        if( start < len && start < firststart )  
+        {  
+            firststart = start  
+        }  
+        ln = ln + 1  
+    }  
+  
+    ln = lnFirst  
+    while( ln <= lnLast )  
+    {  
+        buf = GetBufLine( hbuf, ln )  
+        len = strlen( buf )  
+        if( len > 0 )  
+        {  
+            buf2 = cat( cat( strmid( buf, 0, firststart ), "//" ), strmid( buf, firststart, len ) )  
+            PutBufLine ( hbuf, ln, buf2 )  
+        }  
+        ln = ln + 1  
+    }  
+    SetWndSel( hwnd, selection )  
+}  
+  
+macro unComment_gg()  
+{   //取消杠杠注释,不选中多行的话,默认只处理当前行  
+    hwnd = GetCurrentWnd()  
+    selection = GetWndSel( hwnd )  
+    lnFirst = GetWndSelLnFirst( hwnd )  
+    lnLast = GetWndSelLnLast( hwnd )  
+  
+    hbuf = GetCurrentBuf()  
+    ln = lnFirst  
+    while( ln <= lnLast )  
+    {  
+        buf = GetBufLine( hbuf, ln )  
+        len = strlen( buf )  
+        if( len >= 2 )  
+        {  
+            start = 0  
+  
+            while( strmid( buf, start, start + 1 ) == CharFromAscii(32) || strmid( buf, start, start + 1 ) == CharFromAscii(9) )  
+            {  
+                start = start + 1  
+                if( start >= len )  
+                    break  
+            }  
+            if( start < len - 2 )  
+            {  
+                if( strmid( buf, start, start + 2 ) == "//" )  
+                {  
+                    buf2 = cat( strmid( buf, 0, start ), strmid( buf, start + 2, len ) )  
+                    PutBufLine( hbuf, ln, buf2 )  
+                }  
+            }  
+        }  
+        ln = ln + 1  
+    }  
+    SetWndSel( hwnd, selection )  
+} 
+
+2. 创建sourceinsight工程，将工程所需的源代码与上一步骤中的***.em文件都添加到工程中。
+3. 重建工程: Project->Rebuilt Project; （若是在工程建好后再添加.em文件，此步很重要）
+
+4.添加快捷键: Options->Key Assignment，在command编辑框下敲入MultiLineComment会出现Macro:MultiLineComment, 点击Assign New Key...，输入快捷键，常用的是Ctrl+\, 若该快捷键已被占用，可使用Ctrl+shift+\或其他习惯用的。
+
+5.添加工具栏菜单: Options->Menu Assignment, 同样在command编辑框下敲入MultiLineComment, 点击右边的Menu下拉框，选择想要放的菜单栏，例如放在work菜单栏下，再双击MeauContents下的<end of menu>，点击右边的Insert按钮，插入子菜单名称即可，如MultiLineComment, 再点击OK。
+
+6.此时选择多行代码按快捷键就可以注释和非注释某些代码了。主菜单下会有Work菜单项，Work下有MultiLineComment子菜单项，并且显示了快捷键，选择需要注释的代码段，点击子菜单或使用快捷键即可实现多行注释，再点击快捷键或子菜单即可消除多行注释。
+
+或者直接将代码copy到utils.em文件中
