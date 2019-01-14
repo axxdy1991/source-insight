@@ -1,4 +1,4 @@
-将一下代码copy保存为codecomment.em文件
+1.将一下代码copy保存为codecomment.em文件
 macro Comments_orUn_gx()  
 {   //用杠星注释多行,或取消杠星注释 ,不选中多行时,只处理当前行  
     hwnd = GetCurrentWnd()  
